@@ -42,6 +42,10 @@
 #include "Fat.h"
 #include "Process.h"
 
+#ifdef TAINT_EXT3
+#include "Ext3.h"
+#endif /*TAINT_EXT3*/
+
 extern "C" void dos_partition_dec(void const *pp, struct dos_partition *d);
 extern "C" void dos_partition_enc(void *pp, struct dos_partition *d);
 
@@ -316,6 +320,30 @@ int Volume::mountVol() {
         errno = 0;
         setState(Volume::State_Checking);
 
+#ifdef TAINT_EXT3
+        int isExt = 0;
+        int rc2 = 1;
+
+        if (Ext3::identify(devicePath)==0)
+        	isExt=1;
+
+        if (isExt)
+        	rc2 = Ext3::check(devicePath);
+        else
+        	rc2 = Fat::check(devicePath);
+
+        if (rc2) {
+            if (errno == ENODATA) {
+                SLOGW("%s does not contain a FAT or ext filesystem\n", devicePath);
+                continue;
+            }
+            errno = EIO;
+            /* Badness - abort the mount */
+            SLOGE("%s failed FS checks (%s)", devicePath, strerror(errno));
+            setState(Volume::State_Idle);
+            return -1;
+        }
+#else
         if (Fat::check(devicePath)) {
             if (errno == ENODATA) {
                 SLOGW("%s does not contain a FAT filesystem\n", devicePath);
@@ -327,17 +355,31 @@ int Volume::mountVol() {
             setState(Volume::State_Idle);
             return -1;
         }
+#endif /*TAINT_EXT3*/
 
         /*
          * Mount the device on our internal staging mountpoint so we can
          * muck with it before exposing it to non priviledged users.
          */
+#ifdef TAINT_EXT3
+        rc2 = 1;
+        if (isExt)
+        	rc2 = Ext3::doMount(devicePath, "/mnt/secure/staging", false, false);
+        else
+        	rc2 = Fat::doMount(devicePath, "/mnt/secure/staging", false, false, false, 1000, 1015, 0702, true);
+        errno = 0;
+        if (rc2) {
+            SLOGE("%s failed to mount (%s)\n", devicePath, strerror(errno));
+            continue;
+        }
+#else
         errno = 0;
         if (Fat::doMount(devicePath, "/mnt/secure/staging", false, false, false,
                 1000, 1015, 0702, true)) {
             SLOGE("%s failed to mount via VFAT (%s)\n", devicePath, strerror(errno));
             continue;
         }
+#endif /*TAINT_EXT3*/
 
         SLOGI("Device %s, target %s mounted @ /mnt/secure/staging", devicePath, getMountpoint());
 

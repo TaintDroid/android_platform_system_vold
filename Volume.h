@@ -17,6 +17,10 @@
 #ifndef _VOLUME_H
 #define _VOLUME_H
 
+// begin WITH_TAINT_TRACKING
+#define TAINT_EXT3
+// end WITH_TAINT_TRACKING
+
 #include <utils/List.h>
 
 class NetlinkEvent;
