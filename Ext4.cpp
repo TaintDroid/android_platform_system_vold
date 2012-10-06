@@ -79,6 +79,15 @@ int Ext4::doMount(const char *fsPath, const char *mountPoint, bool ro, bool remo
         rc = mount(fsPath, mountPoint, "ext4", flags, NULL);
 #endif /*TAINT_EXT4*/
     }
+    
+#ifdef TAINT_EXT4
+    // Chmod the mount point so that its a free-for-all.
+    // (required for consistency with VFAT.. sigh)
+    if (chmod(mountPoint, 0777) < 0) {
+        SLOGE("Failed to chmod %s (%s)", mountPoint, strerror(errno));
+        return -errno;
+    }
+#endif /*TAINT_EXT4*/
 
     return rc;
 }
