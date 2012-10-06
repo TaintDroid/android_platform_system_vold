@@ -44,6 +44,9 @@
 #include "VolumeManager.h"
 #include "ResponseCode.h"
 #include "Fat.h"
+#ifdef TAINT_EXT4
+#include "Ext4.h"
+#endif /*TAINT_EXT4*/
 #include "Process.h"
 #include "cryptfs.h"
 
@@ -398,9 +401,17 @@ int Volume::mountVol() {
         errno = 0;
         setState(Volume::State_Checking);
 
+#ifdef TAINT_EXT4
+        if (Fat::check(devicePath) && Ext4::check(devicePath)) {
+#else
         if (Fat::check(devicePath)) {
+#endif /*TAINT_EXT4*/
             if (errno == ENODATA) {
+#ifdef TAINT_EXT4
+                SLOGW("%s does not contain a FAT or ext4 filesystem\n", devicePath);
+#else
                 SLOGW("%s does not contain a FAT filesystem\n", devicePath);
+#endif /*TAINT_EXT4*/
                 continue;
             }
             errno = EIO;
@@ -425,11 +436,20 @@ int Volume::mountVol() {
             // For secondary external storage we keep things locked up.
             gid = AID_MEDIA_RW;
         }
+#ifdef TAINT_EXT4
+        if (Fat::doMount(devicePath, "/mnt/secure/staging", false, false, false,
+                AID_SYSTEM, gid, 0702, true)
+            && Ext4::doMount(devicePath, "/mnt/secure/staging", false, false, false)) {
+            SLOGE("%s failed to mount via VFAT or EXT4 (%s)\n", devicePath, strerror(errno));
+            continue;
+        }
+#else
         if (Fat::doMount(devicePath, "/mnt/secure/staging", false, false, false,
                 AID_SYSTEM, gid, 0702, true)) {
             SLOGE("%s failed to mount via VFAT (%s)\n", devicePath, strerror(errno));
             continue;
         }
+#endif /*TAINT_EXT4*/
 
         SLOGI("Device %s, target %s mounted @ /mnt/secure/staging", devicePath, getMountpoint());
 
