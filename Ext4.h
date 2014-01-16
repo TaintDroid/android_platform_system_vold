@@ -17,10 +17,17 @@
 #ifndef _EXT4_H
 #define _EXT4_H
 
+// begin WITH_TAINT_TRACKING
+#define TAINT_EXT4
+// end WITH_TAINT_TRACKING
+
 #include <unistd.h>
 
 class Ext4 {
 public:
+#ifdef TAINT_EXT4
+    static int check(const char *fsPath);
+#endif /*TAINT_EXT4*/
     static int doMount(const char *fsPath, const char *mountPoint, bool ro, bool remount,
             bool executable);
     static int format(const char *fsPath, const char *mountpoint);
